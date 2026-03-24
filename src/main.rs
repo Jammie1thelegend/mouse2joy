@@ -68,7 +68,7 @@ fn main() -> Result<(), Mouse2JoyError> {
 
     // ask user which mouse to use
     if !(mouse_devices.len() == 1) {
-        println!("Several mouses detected, please select one:");
+        println!("Several mice detected, please select one:");
         for (i, mouse) in mouse_devices.iter().enumerate() {
             println!("{}: {}", i + 1, mouse.name().unwrap_or("Unknown Device"));
         }
@@ -99,7 +99,6 @@ fn main() -> Result<(), Mouse2JoyError> {
         match mouse.fetch_events() {
             Ok(events) => {
                 for ev in events {
-                    info!("Fetched event");
                     if ev.kind() == InputEventKind::RelAxis(RelativeAxisType::REL_X) {
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
@@ -186,7 +185,7 @@ fn load_config() -> Config {
           conf
         }
         Err(_) => {
-          warn!("Problem laoding the configuration, using default");
+          warn!("Problem loading the configuration, using default");
           Config::default()
         }
       }

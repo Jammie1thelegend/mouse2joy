@@ -8,7 +8,7 @@ const BASE_DEFAULT_POSITION: i32 = 0;
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
-  pub sensitivity: i32,
+  pub sensitivity: f32,
   pub dead_zone: i32,
   pub flat: i32,
   pub gui: bool,
@@ -21,7 +21,7 @@ pub struct Config {
 impl Config {
   pub fn default() -> Self {
     Self {
-      sensitivity: 1,
+      sensitivity: 1.0,
       dead_zone: 0,
       flat: 0,
       gui: true,
@@ -43,6 +43,7 @@ impl Config {
 
     // Get the SUDO_USER environment variable to find the actual user
     let user = std::env::var("SUDO_USER").unwrap_or_else(|_| String::from("root"));
+
     
     // If running as sudo, construct path using the real user's home
     if user != "root" {
@@ -65,12 +66,16 @@ impl Config {
     toml::from_str(&contents)
   }
 
+  fn range(&self) -> i32 {
+    ((BASE_RANGE as f32/self.sensitivity)/2.0) as i32
+  }
+
   pub fn range_min(&self) -> i32 {
-    -(self.sensitivity*BASE_RANGE)/2
+    -self.range()
   }
 
   pub fn range_max(&self) -> i32 {
-    (self.sensitivity*BASE_RANGE)/2
+    self.range()
   }
 
   pub fn fuzz(&self) -> i32 {

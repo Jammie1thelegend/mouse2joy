@@ -14,11 +14,12 @@ sudo ./mouse2joy
 ```
 
 ## Configuration
-A few settings can be tweaked when using mouse2joy. To do so create a new directory `.config/mouse2joy`, in this directory create a new file called `configuration.toml`. In this file you can paste the following:
+A few settings can be tweaked when using mouse2joy. To do so create a new directory `.config/mouse2joy`, in this directory create a new file called `config.toml`. In this file you can paste the following:
 ```
-sensitivity = 100     # Adjust sensitivity of mouse movement
+sensitivity = 1.0     # Adjust sensitivity of mouse movement
 dead_zone = 10        # Dead zone for mouse input
 flat = 5              # Flat response region
+gui = true              # dummy
 ```
 Now you can play around with the different values in this file, and mouse2joy should pick up on the changes. Just make sure to restart mouse2joy everytime.
 
