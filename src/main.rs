@@ -76,14 +76,8 @@ fn main() -> Result<(), Mouse2JoyError> {
 
     let index = input_in_range(1, mouse_devices.len());
     let mut mouse = mouse_devices.remove(index - 1);
+    let mouse_path = mouse.physical_path();
     info!("Using \"{}\" as input device", mouse.name().unwrap_or("Unknown Device"));
-
-    // ungrab unwanted mouse devices
-    for mut device in mouse_devices {
-        device
-            .ungrab()
-            .unwrap_or_else(|e| warn!("Failed to ungrab device: {}", e));
-    }
 
     // set up virtual joystick
     let axis_info = AbsInfo::new(conf.value(), conf.range_min(), conf.range_max(), conf.fuzz(), conf.flat(), conf.resolution());
@@ -95,11 +89,13 @@ fn main() -> Result<(), Mouse2JoyError> {
     let max: i32 = conf.range_max();
     let mut mouse_x_pos: i32 = 0;
     let mut joystick_x_pos: i32;
+    let mut shortcut: [bool; 2] = [false, false]; // right, middle click
+    let mut mouse2joy_active: bool = false;
     loop {
         for ev in mouse.fetch_events().unwrap(){
                 match ev.destructure() {
                     EventSummary::RelativeAxis(_, RelativeAxisCode::REL_X, _) => {
-
+                        if mouse2joy_active == false {continue}
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
                         if joystick_x_pos < min {
@@ -123,11 +119,24 @@ fn main() -> Result<(), Mouse2JoyError> {
                           }
                         }
                     },
-                    EventSummary::Key(_, KeyCode::BTN_RIGHT, 1) => { // debug
-                    },
+
+                    EventSummary::Key(_, KeyCode::BTN_RIGHT, 1) => { shortcut[0] = true},
+                    EventSummary::Key(_, KeyCode::BTN_RIGHT, 0) => { shortcut[0] = false},
+
+                    EventSummary::Key(_, KeyCode::BTN_LEFT, 1) => { shortcut[1] = true},
+                    EventSummary::Key(_, KeyCode::BTN_LEFT, 0) => { shortcut[1] = false},
                     _ => {}
                 }
+            };
+        if shortcut == [true, true] {
+            if mouse2joy_active == false {
+                warn!("mouse2joy on");
+                mouse2joy_active = true;
+                continue
             }
+            mouse2joy_active = false;
+            warn!("mouse2joy off")
+        }
          }
     }
 
