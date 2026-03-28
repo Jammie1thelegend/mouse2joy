@@ -1,6 +1,6 @@
 use evdev::{
-    uinput::VirtualDevice, uinput::VirtualDeviceBuilder, AbsInfo, AbsoluteAxisType, Device,
-    EventType, InputEvent, InputEventKind, Key, RelativeAxisType, UinputAbsSetup,
+    uinput::VirtualDevice, AbsInfo, AbsoluteAxisCode, Device,
+    EventType, InputEvent, KeyCode, RelativeAxisCode, UinputAbsSetup, EventSummary
 };
 use std::fs;
 use thiserror::Error;
@@ -13,21 +13,21 @@ use configuration::Config;
 const VJOYSTICK_NAME: &str = "mouse2joy";
 
 // virtual joystick buttons, won't be used but increase chances of joystick being recognized
-static KEYS: [Key; 14] = [
-    Key::BTN_EAST,
-    Key::BTN_SOUTH,
-    Key::BTN_NORTH,
-    Key::BTN_WEST,
-    Key::BTN_DPAD_UP,
-    Key::BTN_DPAD_DOWN,
-    Key::BTN_DPAD_LEFT,
-    Key::BTN_DPAD_RIGHT,
-    Key::BTN_SELECT,
-    Key::BTN_START,
-    Key::BTN_TL,
-    Key::BTN_TR,
-    Key::BTN_TL2,
-    Key::BTN_TR2,
+static KEYS: [KeyCode; 14] = [
+    KeyCode::BTN_EAST,
+    KeyCode::BTN_SOUTH,
+    KeyCode::BTN_NORTH,
+    KeyCode::BTN_WEST,
+    KeyCode::BTN_DPAD_UP,
+    KeyCode::BTN_DPAD_DOWN,
+    KeyCode::BTN_DPAD_LEFT,
+    KeyCode::BTN_DPAD_RIGHT,
+    KeyCode::BTN_SELECT,
+    KeyCode::BTN_START,
+    KeyCode::BTN_TL,
+    KeyCode::BTN_TR,
+    KeyCode::BTN_TL2,
+    KeyCode::BTN_TR2,
 ];
 
 #[derive(Error, Debug)]
@@ -60,7 +60,7 @@ fn main() -> Result<(), Mouse2JoyError> {
                 .filter(|device| device.supported_events().contains(EventType::RELATIVE))
         })
         .collect();
-
+    
     if mouse_devices.is_empty() {
         error!("{}", Mouse2JoyError::NoMouseError);
         return Err(Mouse2JoyError::NoMouseError);
@@ -96,10 +96,10 @@ fn main() -> Result<(), Mouse2JoyError> {
     let mut mouse_x_pos: i32 = 0;
     let mut joystick_x_pos: i32;
     loop {
-        match mouse.fetch_events() {
-            Ok(events) => {
-                for ev in events {
-                    if ev.kind() == InputEventKind::RelAxis(RelativeAxisType::REL_X) {
+        for ev in mouse.fetch_events().unwrap(){
+                match ev.destructure() {
+                    EventSummary::RelativeAxis(_, RelativeAxisCode::REL_X, _) => {
+
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
                         if joystick_x_pos < min {
@@ -109,8 +109,8 @@ fn main() -> Result<(), Mouse2JoyError> {
                             joystick_x_pos = max
                         }
                         let ev = InputEvent::new(
-                            EventType::ABSOLUTE,
-                            AbsoluteAxisType::ABS_X.0,
+                            0x03, //Event_type::ABSOLUTE
+                            0x00, //AbsoluteAxisCode::ABS_X.0
                             joystick_x_pos,
                         );
                         match joystick.emit(&[ev]) {
@@ -122,27 +122,25 @@ fn main() -> Result<(), Mouse2JoyError> {
                             continue;
                           }
                         }
-                    }
+                    },
+                    EventSummary::Key(_, KeyCode::BTN_RIGHT, 1) => { // debug
+                    },
+                    _ => {}
                 }
             }
-            Err(e) => {
-                warn!("Failed to fetch mouse events: {}", e);
-                continue;
-            }
-        }
+         }
     }
-}
 
 fn create_joystick(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevice> {
-    let abs_x = UinputAbsSetup::new(AbsoluteAxisType::ABS_X, abs_info);
-    let abs_y = UinputAbsSetup::new(AbsoluteAxisType::ABS_Y, abs_info);
+    let abs_x = UinputAbsSetup::new(AbsoluteAxisCode::ABS_X, abs_info);
+    let abs_y = UinputAbsSetup::new(AbsoluteAxisCode::ABS_Y, abs_info);
 
     let mut keys = evdev::AttributeSet::new();
     for button in KEYS {
         keys.insert(button)
     }
 
-    let joystick = VirtualDeviceBuilder::new()?
+    let joystick = VirtualDevice::builder()?
         .name(name)
         .with_absolute_axis(&abs_x)?
         .with_absolute_axis(&abs_y)?
