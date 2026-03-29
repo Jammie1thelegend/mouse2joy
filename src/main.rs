@@ -1,6 +1,5 @@
 use evdev::{
-    uinput::VirtualDevice, AbsInfo, AbsoluteAxisCode, Device,
-    EventType, InputEvent, KeyCode, RelativeAxisCode, UinputAbsSetup, EventSummary
+    AbsInfo, AbsoluteAxisCode, AttributeSet, Device, EventSummary, EventType, InputEvent, KeyCode, RelativeAxisCode, UinputAbsSetup, uinput::VirtualDevice
 };
 use std::fs;
 use thiserror::Error;
@@ -76,13 +75,16 @@ fn main() -> Result<(), Mouse2JoyError> {
 
     let index = input_in_range(1, mouse_devices.len());
     let mut mouse = mouse_devices.remove(index - 1);
-    let mouse_path = mouse.physical_path();
     info!("Using \"{}\" as input device", mouse.name().unwrap_or("Unknown Device"));
 
     // set up virtual joystick
     let axis_info = AbsInfo::new(conf.value(), conf.range_min(), conf.range_max(), conf.fuzz(), conf.flat(), conf.resolution());
     let mut joystick = create_joystick(axis_info, VJOYSTICK_NAME).unwrap();
     info!("Virtual joystick created");
+
+    // set up virtual touchpad for absolute mouse movements
+    let touch_axis_info = AbsInfo::new(0, -100, 100, 0, 0, 200);
+    let mut touchpad = create_touchpad(touch_axis_info, &(VJOYSTICK_NAME.to_owned()+"_pad")).unwrap();
 
     // fetch events and send them through to virtual joystick
     let min: i32 = conf.range_min();
@@ -105,8 +107,8 @@ fn main() -> Result<(), Mouse2JoyError> {
                             joystick_x_pos = max
                         }
                         let ev = InputEvent::new(
-                            0x03, //Event_type::ABSOLUTE
-                            0x00, //AbsoluteAxisCode::ABS_X.0
+                            EventType::ABSOLUTE.0,
+                            AbsoluteAxisCode::ABS_X.0,
                             joystick_x_pos,
                         );
                         match joystick.emit(&[ev]) {
@@ -132,10 +134,17 @@ fn main() -> Result<(), Mouse2JoyError> {
             if mouse2joy_active == false {
                 warn!("mouse2joy on");
                 mouse2joy_active = true;
+                let _ = mouse.grab();
+                //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, 10000)]);
+                //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, -100)]);
+                let _ = mouse.ungrab();
+                //let ev = InputEvent::new(0x03, 0x00, max_x/2);
+                touchpad_touch(1920/2, 1080/2, &mut touchpad);
                 continue
             }
             mouse2joy_active = false;
-            warn!("mouse2joy off")
+            warn!("mouse2joy off");
+            warn!("!! Program still running, press ctrl+C to stop.")
         }
          }
     }
@@ -157,6 +166,38 @@ fn create_joystick(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevi
         .build()?;
 
     Ok(joystick)
+}
+
+fn create_touchpad(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevice> {
+    let max_x = 1080;
+    let max_y = 1920;
+
+    let abs_setup_x = AbsInfo::new(0, 0, max_x, 0, 0, 0);
+    let abs_setup_y = AbsInfo::new(0, 0, max_y, 0, 0, 0);
+
+    let mut buttons = AttributeSet::<KeyCode>::new();
+    buttons.insert(KeyCode::BTN_TOUCH);
+
+    let touchpad = VirtualDevice::builder()?
+        .name("Fake TouchScreen")
+        .with_keys(&buttons)?
+        .with_absolute_axis(&UinputAbsSetup::new(AbsoluteAxisCode::ABS_X, abs_setup_x))?
+        .with_absolute_axis(&UinputAbsSetup::new(AbsoluteAxisCode::ABS_Y, abs_setup_y))?
+        .build()?;
+
+    Ok(touchpad)
+}
+
+fn touchpad_touch(x:i32, y:i32, pad:&mut VirtualDevice) {
+    let move_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, x);
+    let move_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, y);
+    let touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 1);
+    match pad.emit(&[touch, move_x, move_y]) {
+        Ok(_) => {info!("touchpad!")},
+        Err(e) => {warn!(":( Error: {}", e)}
+    }
+    let up_event = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 0);
+    pad.emit(&[up_event]).unwrap()
 }
 
 // ask user for a usize input within a given range

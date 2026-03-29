@@ -33,7 +33,7 @@ impl Config {
       Some(_) => {
         return std::path::Path::new(&Config::path()).exists()
       }
-      None => {
+      std::prelude::v1::None => {
         return false
       }
     }
