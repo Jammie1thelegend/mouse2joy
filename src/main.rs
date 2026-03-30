@@ -1,5 +1,5 @@
 use evdev::{
-    AbsInfo, AbsoluteAxisCode, AttributeSet, Device, EventSummary, EventType, InputEvent, KeyCode, RelativeAxisCode, UinputAbsSetup, uinput::VirtualDevice
+    AbsInfo, AbsoluteAxisCode, AttributeSet, BusType, Device, EventSummary, EventType, InputEvent, InputId, KeyCode, PropType, RelativeAxisCode, UinputAbsSetup, uinput::VirtualDevice
 };
 use std::fs;
 use thiserror::Error;
@@ -169,20 +169,34 @@ fn create_joystick(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevi
 }
 
 fn create_touchpad(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevice> {
-    let max_x = 1080;
-    let max_y = 1920;
+    let max_x = 1920;
+    let max_y = 1080;
 
     let abs_setup_x = AbsInfo::new(0, 0, max_x, 0, 0, 0);
     let abs_setup_y = AbsInfo::new(0, 0, max_y, 0, 0, 0);
+    
+    let abs_pressure = AbsInfo::new(0, 0, 100, 0, 0, 0); //dummy
 
     let mut buttons = AttributeSet::<KeyCode>::new();
     buttons.insert(KeyCode::BTN_TOUCH);
+    buttons.insert(KeyCode::BTN_TOOL_FINGER); //dummy
+    buttons.insert(KeyCode::BTN_LEFT); //dummy
+    buttons.insert(KeyCode::BTN_RIGHT); //dummy
+    buttons.insert(KeyCode::BTN_MIDDLE); //dummy
+
+    let mut prop = AttributeSet::<PropType>::new();
+    prop.insert(PropType::POINTER);
+
+    let fakeid = InputId::new(BusType::BUS_USB, 0x2, 0x8, 0x200);
 
     let touchpad = VirtualDevice::builder()?
-        .name("Fake TouchScreen")
+        .name(name)
+        .input_id(fakeid)
         .with_keys(&buttons)?
+        .with_properties(&prop)?
         .with_absolute_axis(&UinputAbsSetup::new(AbsoluteAxisCode::ABS_X, abs_setup_x))?
         .with_absolute_axis(&UinputAbsSetup::new(AbsoluteAxisCode::ABS_Y, abs_setup_y))?
+        .with_absolute_axis(&UinputAbsSetup::new(AbsoluteAxisCode::ABS_PRESSURE, abs_pressure))?
         .build()?;
 
     Ok(touchpad)
@@ -191,13 +205,13 @@ fn create_touchpad(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevi
 fn touchpad_touch(x:i32, y:i32, pad:&mut VirtualDevice) {
     let move_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, x);
     let move_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, y);
-    let touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 1);
-    match pad.emit(&[touch, move_x, move_y]) {
+    let start_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 1);
+    match pad.emit(&[start_touch, move_x, move_y]) {
         Ok(_) => {info!("touchpad!")},
         Err(e) => {warn!(":( Error: {}", e)}
     }
-    let up_event = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 0);
-    pad.emit(&[up_event]).unwrap()
+    let stop_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 0);
+    pad.emit(&[stop_touch]).unwrap()
 }
 
 // ask user for a usize input within a given range
