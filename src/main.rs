@@ -100,6 +100,9 @@ fn main() -> Result<(), Mouse2JoyError> {
                         if mouse2joy_active == false {continue}
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
+
+                        touchpad_touch(joystick_x_pos, 1080/2, &mut touchpad);
+
                         if joystick_x_pos < min {
                             joystick_x_pos = min
                         }
@@ -127,25 +130,25 @@ fn main() -> Result<(), Mouse2JoyError> {
 
                     EventSummary::Key(_, KeyCode::BTN_LEFT, 1) => { shortcut[1] = true},
                     EventSummary::Key(_, KeyCode::BTN_LEFT, 0) => { shortcut[1] = false},
+
                     _ => {}
                 }
             };
+        
         if shortcut == [true, true] {
-            if mouse2joy_active == false {
-                warn!("mouse2joy on");
-                mouse2joy_active = true;
-                let _ = mouse.grab();
-                //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, 10000)]);
-                //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, -100)]);
-                let _ = mouse.ungrab();
-                //let ev = InputEvent::new(0x03, 0x00, max_x/2);
-                touchpad_touch(1920/2, 1080/2, &mut touchpad);
+            if mouse2joy_active == true {
+                mouse2joy_active = false;
+                warn!("mouse2joy off");
+                warn!("!! Program still running, press ctrl+C to stop.");
                 continue
             }
-            mouse2joy_active = false;
-            warn!("mouse2joy off");
-            warn!("!! Program still running, press ctrl+C to stop.")
-        }
+            warn!("mouse2joy on");
+            mouse2joy_active = true;
+            let _ = mouse.grab();
+            //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, 10000)]);
+            //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, -100)]);
+            let _ = mouse.ungrab();
+            }
          }
     }
 
@@ -203,16 +206,27 @@ fn create_touchpad(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevi
 }
 
 fn touchpad_touch(x:i32, y:i32, pad:&mut VirtualDevice) {
+    let m0_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, 0);
+    let m0_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, 0);
     let move_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, x);
     let move_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, y);
+
+    let pressure_down = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_PRESSURE.0, 80);
+
     let start_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 1);
-    match pad.emit(&[start_touch, move_x, move_y]) {
+    let start_finger = InputEvent::new(1, KeyCode::BTN_TOOL_FINGER.0, 1);
+
+    match pad.emit(&[start_touch, m0_x, m0_y, pressure_down, move_x, move_y, pressure_down, start_finger]) {
         Ok(_) => {info!("touchpad!")},
         Err(e) => {warn!(":( Error: {}", e)}
     }
+    let pressure_up = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_PRESSURE.0, 0);
     let stop_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 0);
-    pad.emit(&[stop_touch]).unwrap()
+    let stop_finger = InputEvent::new(1, KeyCode::BTN_TOOL_FINGER.0, 0);
+    pad.emit(&[stop_touch, pressure_up, stop_finger]).unwrap()
 }
+
+
 
 // ask user for a usize input within a given range
 fn input_in_range(min: usize, max: usize) -> usize {
