@@ -90,7 +90,7 @@ fn main() -> Result<(), Mouse2JoyError> {
     let min: i32 = conf.range_min();
     let max: i32 = conf.range_max();
     let mut mouse_x_pos: i32 = 0;
-    let mut joystick_x_pos: i32;
+    let mut joystick_x_pos: i32 = 0;
     let mut shortcut: [bool; 2] = [false, false]; // right, middle click
     let mut mouse2joy_active: bool = false;
     loop {
@@ -101,7 +101,7 @@ fn main() -> Result<(), Mouse2JoyError> {
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
 
-                        touchpad_touch(joystick_x_pos, 1080/2, &mut touchpad);
+                        //touchpad_touch(joystick_x_pos, 1080/2, &mut touchpad);
 
                         if joystick_x_pos < min {
                             joystick_x_pos = min
@@ -145,8 +145,8 @@ fn main() -> Result<(), Mouse2JoyError> {
             warn!("mouse2joy on");
             mouse2joy_active = true;
             let _ = mouse.grab();
-            //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, 10000)]);
-            //let _ = mouse.send_events(&[InputEvent::new(0x02, 0x00, -100)]);
+            let _ = mouse.send_events(&[InputEvent::new(EventType::RELATIVE.0, RelativeAxisCode::REL_X.0, 0)]);
+            let _ = mouse.send_events(&[InputEvent::new(EventType::RELATIVE.0, RelativeAxisCode::REL_Y.0, 0)]);
             let _ = mouse.ungrab();
             }
          }
@@ -206,26 +206,50 @@ fn create_touchpad(abs_info: AbsInfo, name: &str) -> std::io::Result<VirtualDevi
 }
 
 fn touchpad_touch(x:i32, y:i32, pad:&mut VirtualDevice) {
-    let m0_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, 0);
-    let m0_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, 0);
-    let move_x = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_X.0, x);
-    let move_y = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_Y.0, y);
+    let m0_x = create_abs(AbsoluteAxisCode::ABS_X, 0);
+    let m0_y = create_abs(AbsoluteAxisCode::ABS_Y, 0);
+    
 
-    let pressure_down = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_PRESSURE.0, 80);
+    let pressure_down = create_abs(AbsoluteAxisCode::ABS_PRESSURE, 80);
 
     let start_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 1);
     let start_finger = InputEvent::new(1, KeyCode::BTN_TOOL_FINGER.0, 1);
 
-    match pad.emit(&[start_touch, m0_x, m0_y, pressure_down, move_x, move_y, pressure_down, start_finger]) {
+    const MAX_EV: i32 = 30;
+    const INI: i32 = 5;
+    let step_x = x/MAX_EV;
+    let step_y = y/MAX_EV;
+    
+
+    let mut count:i32 = INI;
+    let mut event_arr: [InputEvent; (MAX_EV+INI) as usize] = [start_touch; (MAX_EV+INI) as usize];
+    event_arr[1] = start_finger;
+    event_arr[2] = pressure_down;
+    event_arr[3] = m0_x;
+    event_arr[4] = m0_y;
+    while count < MAX_EV + INI {
+        event_arr[(count+1) as usize] = pressure_down;
+        event_arr[(count+1) as usize] = create_abs(AbsoluteAxisCode::ABS_X, count*step_x);
+        event_arr[(count+2) as usize] = create_abs(AbsoluteAxisCode::ABS_Y, count*step_y);
+        count += 3;
+    }
+
+    match pad.emit(&event_arr) {
         Ok(_) => {info!("touchpad!")},
         Err(e) => {warn!(":( Error: {}", e)}
     }
-    let pressure_up = InputEvent::new(EventType::ABSOLUTE.0, AbsoluteAxisCode::ABS_PRESSURE.0, 0);
+
+
+    let pressure_up = create_abs(AbsoluteAxisCode::ABS_PRESSURE, 0);
     let stop_touch = InputEvent::new(1, KeyCode::BTN_TOUCH.0, 0);
     let stop_finger = InputEvent::new(1, KeyCode::BTN_TOOL_FINGER.0, 0);
     pad.emit(&[stop_touch, pressure_up, stop_finger]).unwrap()
 }
 
+fn create_abs(code:AbsoluteAxisCode, val:i32) -> InputEvent {
+    let event = InputEvent::new(EventType::ABSOLUTE.0, code.0, val);
+    return event;
+}
 
 
 // ask user for a usize input within a given range
