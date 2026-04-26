@@ -69,7 +69,7 @@ fn main() -> Result<(), Mouse2JoyError> {
 
     //create thread to detect keyboard presses
     let (tx, rx) = mpsc::channel();
-    let mut thr_mouse = Device::open(mouse_and_path.1).unwrap();
+    let mut thr_mouse = Device::open(&mouse_and_path.1).unwrap();
     thread::spawn(move || {
         let mut mouse2joy_active: bool = false;
         loop{
@@ -107,20 +107,16 @@ fn main() -> Result<(), Mouse2JoyError> {
         }
     });
 
-        
-            
-    
-
-
     // fetch events and send them through to virtual joystick
     let min: i32 = conf.range_min();
     let max: i32 = conf.range_max();
     let mut mouse_x_pos: i32 = 0;
     let mut joystick_x_pos: i32;
     let mut mouse2joy_active: bool = false;
-    loop {
-        
 
+    let mut mouse_main_emit = Device::open(&mouse_and_path.1).unwrap();
+
+    loop {
         for ev in mouse.fetch_events().unwrap(){
                 match ev.destructure() {
                     EventSummary::RelativeAxis(_, RelativeAxisCode::REL_X, _) => {
@@ -129,12 +125,12 @@ fn main() -> Result<(), Mouse2JoyError> {
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
 
-                        //touchpad_touch(joystick_x_pos, 1080/2, &mut touchpad);
-
                         if joystick_x_pos < min {
+                            let _ = mouse_main_emit.send_events(&mouse_move_evs(min - joystick_x_pos, 0));
                             joystick_x_pos = min
                         }
                         if joystick_x_pos > max {
+                            let _ = mouse_main_emit.send_events(&mouse_move_evs(max - joystick_x_pos, 0));
                             joystick_x_pos = max
                         }
                         let ev = InputEvent::new(
@@ -160,16 +156,6 @@ fn main() -> Result<(), Mouse2JoyError> {
 
 fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<(Device, String), Mouse2JoyError> {
     // find all input devices that can be used as a specific type of device
-    /* let mut devices: Vec<Device> = fs::read_dir("/dev/input")
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.path().into_os_string().to_str().map(String::from))
-        .filter_map(|path| {
-            Device::open(&path)
-                .ok()
-                .filter(|device| device.supported_events().contains(filter_evtype))
-        })
-        .collect(); */
 
     let dev_input_paths: Vec<_> = fs::read_dir("/dev/input")
         .unwrap()
@@ -191,11 +177,11 @@ fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<(Device, 
         return Err(Mouse2JoyError::NoMouseError);
     }
 
-    // ask user which mouse to use
+    // ask user which device to use
     if !(devices.len() == 1) {
         println!("Several {} detected, please select one:", devname);
-        for (i, mouse) in devices.iter().enumerate() {
-            println!("{}: {}, more info: {:?}", i + 1, mouse.name().unwrap_or("Unknown Device"), mouse.input_id());
+        for (i, device) in devices.iter().enumerate() {
+            println!("{}: {}, more info: {:?}", i + 1, device.name().unwrap_or("Unknown Device"), device.input_id());
         }
     }
 
