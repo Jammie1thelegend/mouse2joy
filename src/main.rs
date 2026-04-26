@@ -53,10 +53,11 @@ fn main() -> Result<(), Mouse2JoyError> {
     
 
     // select mouse device
-    let mut mouse = select_input_device(EventType::RELATIVE, "mice").unwrap();
+    let mouse_and_path = select_input_device(EventType::RELATIVE, "mice").unwrap();
+    let mut mouse = mouse_and_path.0;
 
     //select keyboard device
-    let mut keyboard = select_input_device(EventType::KEY, "keyboards").unwrap();
+    let mut keyboard = select_input_device(EventType::KEY, "keyboards").unwrap().0;
     
 
     // set up virtual joystick
@@ -68,19 +69,39 @@ fn main() -> Result<(), Mouse2JoyError> {
 
     //create thread to detect keyboard presses
     let (tx, rx) = mpsc::channel();
+    let mut thr_mouse = Device::open(mouse_and_path.1).unwrap();
     thread::spawn(move || {
+        let mut mouse2joy_active: bool = false;
         loop{
             for ev in keyboard.fetch_events().unwrap(){
                 match ev.destructure() {
                     //example
-                    EventSummary::Key(_, KeyCode::KEY_F6, 1) => { tx.send(true).unwrap()},
-                    //EventSummary::Key(_, KeyCode::KEY_F6, 0) => { tx.send(false).unwrap()},
+                    EventSummary::Key(_, KeyCode::KEY_F6, 1) => {
+                        if mouse2joy_active == true {
+                        mouse2joy_active = false;
+                        tx.send(false).unwrap();
+                        warn!("mouse2joy off");
+                        warn!("!! Program still running, press ctrl+C to stop.");
+                        continue
+                    }
+                    warn!("mouse2joy on");
+                    
+                    let _ = thr_mouse.send_events(&mouse_move_evs(0, 0));
+                    let _ = thr_mouse.grab();
+                    let _ = thr_mouse.ungrab(); 
+
+                    mouse2joy_active = true;
+                    tx.send(true).unwrap();
+                        },
                     _ => {}
                 }
             }
         }
     });
 
+        
+            
+    
 
 
     // fetch events and send them through to virtual joystick
@@ -89,29 +110,13 @@ fn main() -> Result<(), Mouse2JoyError> {
     let mut mouse_x_pos: i32 = 0;
     let mut joystick_x_pos: i32;
     let mut mouse2joy_active: bool = false;
-    let mut shortcut: bool; // = false
     loop {
-        shortcut = match rx.try_recv() {Ok(bool) => bool, Err(_e) => false};
-        if shortcut == true {
-            if mouse2joy_active == true {
-                mouse2joy_active = false;
-                warn!("mouse2joy off");
-                warn!("!! Program still running, press ctrl+C to stop.");
-                continue
-            }
-            warn!("mouse2joy on");
-            let _ = mouse.grab();
-            //let _ = mouse.send_events(&mouse_move_evs(-99999, -99999));
-            //let _ = mouse.send_events(&mouse_move_evs(-99999, -99999));
-            //let _ = mouse.send_events(&mouse_move_evs(1920/2, 1080/2));
-            let _ = mouse.send_events(&mouse_move_evs(0, 0));
-            let _ = mouse.ungrab();
-            mouse2joy_active = true;
-        }
+        
 
         for ev in mouse.fetch_events().unwrap(){
                 match ev.destructure() {
                     EventSummary::RelativeAxis(_, RelativeAxisCode::REL_X, _) => {
+                        mouse2joy_active = match rx.try_recv() {Ok(bool) => bool, Err(_e) => mouse2joy_active};
                         if mouse2joy_active == false {continue}
                         mouse_x_pos += ev.value();
                         joystick_x_pos = mouse_x_pos;
@@ -139,22 +144,15 @@ fn main() -> Result<(), Mouse2JoyError> {
                           }
                         }
                     },
-
-                    //EventSummary::Key(_, KeyCode::BTN_RIGHT, 1) => { shortcut[0] = true},
-                    //EventSummary::Key(_, KeyCode::BTN_RIGHT, 0) => { shortcut[0] = false},
-
-                    //EventSummary::Key(_, KeyCode::BTN_LEFT, 1) => { shortcut[1] = true},
-                    //EventSummary::Key(_, KeyCode::BTN_LEFT, 0) => { shortcut[1] = false},
-
                     _ => {}
                 }
             }
          }
     }
 
-fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<Device, Mouse2JoyError> {
+fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<(Device, String), Mouse2JoyError> {
     // find all input devices that can be used as a specific type of device
-    let mut devices: Vec<Device> = fs::read_dir("/dev/input")
+    /* let mut devices: Vec<Device> = fs::read_dir("/dev/input")
         .unwrap()
         .filter_map(Result::ok)
         .filter_map(|entry| entry.path().into_os_string().to_str().map(String::from))
@@ -163,7 +161,22 @@ fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<Device, M
                 .ok()
                 .filter(|device| device.supported_events().contains(filter_evtype))
         })
-        .collect();
+        .collect(); */
+
+    let dev_input_paths: Vec<_> = fs::read_dir("/dev/input")
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.path().into_os_string().to_str().map(String::from)).collect();
+
+    let mut devices: Vec<Device> = Vec::new();
+    let mut paths:Vec<String> = Vec::new();
+    for p in dev_input_paths {
+        let d = Device::open(&p).ok().filter(|device| device.supported_events().contains(filter_evtype));
+        match d {
+            Some(d) => {devices.push(d); paths.push(p)},
+            _ => continue
+        }
+    }
     
     if devices.is_empty() {
         error!("{}", Mouse2JoyError::NoMouseError);
@@ -180,8 +193,9 @@ fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<Device, M
 
     let index = input_in_range(1, devices.len());
     let input_device = devices.remove(index - 1);
+    let input_device_path = paths.remove(index - 1);
     info!("Using \"{}\" as input device", input_device.name().unwrap_or("Unknown Device"));
-    Ok(input_device)
+    Ok((input_device, input_device_path))
 
 }
 
