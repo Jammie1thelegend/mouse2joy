@@ -85,7 +85,15 @@ fn main() -> Result<(), Mouse2JoyError> {
                         continue
                     }
                     warn!("mouse2joy on");
-                    
+
+                    let _ = thr_mouse.send_events(&mouse_move_evs(i32::MIN, i32::MIN));
+                    let _ = thr_mouse.send_events(&mouse_move_evs(i32::MIN, i32::MIN));
+                    let _ = thr_mouse.grab();
+                    let _ = thr_mouse.ungrab(); 
+                    let _ = thr_mouse.send_events(&mouse_move_evs(0, 0));
+                    let _ = thr_mouse.send_events(&mouse_move_evs(0, 0));
+                    let _ = thr_mouse.send_events(&mouse_move_evs(1920/2, 1080/2));
+                    let _ = thr_mouse.send_events(&mouse_move_evs(0, 0));
                     let _ = thr_mouse.send_events(&mouse_move_evs(0, 0));
                     let _ = thr_mouse.grab();
                     let _ = thr_mouse.ungrab(); 
