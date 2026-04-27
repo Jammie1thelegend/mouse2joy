@@ -34,8 +34,8 @@ static KEYS: [KeyCode; 14] = [
 
 #[derive(Error, Debug)]
 pub enum Mouse2JoyError {
-    #[error("Failed to find a mouse device. Make sure you are running the application with root priviledges.")]
-    NoMouseError,
+    #[error("Failed to find a compatible input device. Make sure you are running the application with root priviledges.")]
+    NoDeviceError,
 
     #[error("Failed to read a mouse input")]
     FailedToReadInput,
@@ -53,11 +53,11 @@ fn main() -> Result<(), Mouse2JoyError> {
     
 
     // select mouse device
-    let mouse_and_path = select_input_device(EventType::RELATIVE, "mice").unwrap();
+    let mouse_and_path = select_input_device(EventType::RELATIVE, RelativeAxisCode::REL_X, KeyCode::BTN_LEFT, "mouse").unwrap();
     let mut mouse = mouse_and_path.0;
 
     //select keyboard device
-    let mut keyboard = select_input_device(EventType::KEY, "keyboards").unwrap().0;
+    let mut keyboard = select_input_device(EventType::KEY, RelativeAxisCode::REL_MISC, KeyCode::KEY_F6, "keyboard").unwrap().0;
     
 
     // set up virtual joystick
@@ -154,7 +154,7 @@ fn main() -> Result<(), Mouse2JoyError> {
          }
     }
 
-fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<(Device, String), Mouse2JoyError> {
+fn select_input_device(filter_evtype: EventType, filter_rel: RelativeAxisCode, filter_key: KeyCode, devname:&str)-> Result<(Device, String), Mouse2JoyError> {
     // find all input devices that can be used as a specific type of device
 
     let dev_input_paths: Vec<_> = fs::read_dir("/dev/input")
@@ -167,28 +167,39 @@ fn select_input_device(filter_evtype:EventType, devname:&str)-> Result<(Device, 
     for p in dev_input_paths {
         let d = Device::open(&p).ok().filter(|device| device.supported_events().contains(filter_evtype));
         match d {
-            Some(d) => {devices.push(d); paths.push(p)},
+            Some(d) => {
+                if filter_rel != RelativeAxisCode::REL_MISC {
+                    if d.supported_relative_axes().map_or(false, |keys| keys.contains(filter_rel)) == false {continue}
+                }
+                if d.supported_keys().map_or(false, |keys| keys.contains(filter_key)) == false {continue}
+                devices.push(d); 
+                paths.push(p);
+                },
             _ => continue
         }
     }
     
     if devices.is_empty() {
-        error!("{}", Mouse2JoyError::NoMouseError);
-        return Err(Mouse2JoyError::NoMouseError);
+        error!("{}", Mouse2JoyError::NoDeviceError);
+        return Err(Mouse2JoyError::NoDeviceError);
     }
 
     // ask user which device to use
+
+    let mut index: usize = 1;
     if !(devices.len() == 1) {
-        println!("Several {} detected, please select one:", devname);
+        println!("Several {}s detected, please select one:", devname);
         for (i, device) in devices.iter().enumerate() {
             println!("{}: {}, more info: {:?}", i + 1, device.name().unwrap_or("Unknown Device"), device.input_id());
-        }
+        };
+        index = input_in_range(1, devices.len())
+    } else {
+        warn!("Only one compatible {} found!", devname);
     }
-
-    let index = input_in_range(1, devices.len());
+    
     let input_device = devices.remove(index - 1);
     let input_device_path = paths.remove(index - 1);
-    info!("Using \"{}\" as input device", input_device.name().unwrap_or("Unknown Device"));
+    info!("Using \"{}\" as {} input device", input_device.name().unwrap_or("Unknown Device"), devname);
     Ok((input_device, input_device_path))
 
 }
