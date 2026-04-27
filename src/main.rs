@@ -72,6 +72,7 @@ fn main() -> Result<(), Mouse2JoyError> {
     let mut thr_mouse = Device::open(&mouse_and_path.1).unwrap();
     thread::spawn(move || {
         let mut mouse2joy_active: bool = false;
+        let mut quit_combo: [bool; 3] = [false, false, false];
         loop{
             for ev in keyboard.fetch_events().unwrap(){
                 match ev.destructure() {
@@ -101,9 +102,16 @@ fn main() -> Result<(), Mouse2JoyError> {
                     mouse2joy_active = true;
                     tx.send(true).unwrap();
                         },
+                    EventSummary::Key(_, KeyCode::KEY_F5, 1) => {quit_combo[0] = true},
+                    EventSummary::Key(_, KeyCode::KEY_F5, 0) => {quit_combo[0] = false},
+                    EventSummary::Key(_, KeyCode::KEY_F7, 1) => {quit_combo[1] = true},
+                    EventSummary::Key(_, KeyCode::KEY_F7, 0) => {quit_combo[1] = false},
+                    EventSummary::Key(_, KeyCode::KEY_F8, 1) => {quit_combo[2] = true},
+                    EventSummary::Key(_, KeyCode::KEY_F8, 0) => {quit_combo[2] = false},
                     _ => {}
                 }
-            }
+            };
+            if quit_combo == [true, true, true] {panic!("force quit");}
         }
     });
 
@@ -147,6 +155,14 @@ fn main() -> Result<(), Mouse2JoyError> {
                             continue;
                           }
                         }
+                    },
+                    EventSummary::Key(_, KeyCode::BTN_LEFT, 1) => {
+                        if mouse2joy_active == false {continue}
+                        
+                        let _ = mouse_main_emit.grab(); 
+                        warn!("Potentially changed mouse focus while tracking mouse, mouse grabbed until mouse2joy deactivated!");
+                        while mouse2joy_active == true {mouse2joy_active = match rx.try_recv() {Ok(bool) => bool, Err(_e) => mouse2joy_active};};
+                        let _ = mouse_main_emit.ungrab(); 
                     },
                     _ => {}
                 }
