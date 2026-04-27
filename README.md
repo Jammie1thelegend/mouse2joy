@@ -10,8 +10,13 @@ cp ./mouse2joy-v0.1.0-x86_64-unknown-linux-musl/mouse2joy .
 ```
 Now you should be able to run it from the same directory with:
 ```
-sudo ./mouse2joy
+sudo ./mouse2joy 
 ```
+(Important! Program does not track mouse input until the enable/ disable hot key is pressed!)
+
+## Hot keys
+ - enable/ disable mouse tracking: f6
+ - force quit program: f5+f7+f8
 
 ## Configuration
 A few settings can be tweaked when using mouse2joy. To do so create a new directory `.config/mouse2joy`, in this directory create a new file called `config.toml`. In this file you can paste the following:
