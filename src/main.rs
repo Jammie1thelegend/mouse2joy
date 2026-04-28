@@ -102,16 +102,13 @@ fn main() -> Result<(), Mouse2JoyError> {
                     mouse2joy_active = true;
                     tx.send(true).unwrap();
                         },
-                    EventSummary::Key(_, KeyCode::KEY_F5, 1) => {quit_combo[0] = true},
-                    EventSummary::Key(_, KeyCode::KEY_F5, 0) => {quit_combo[0] = false},
-                    EventSummary::Key(_, KeyCode::KEY_F7, 1) => {quit_combo[1] = true},
-                    EventSummary::Key(_, KeyCode::KEY_F7, 0) => {quit_combo[1] = false},
-                    EventSummary::Key(_, KeyCode::KEY_F8, 1) => {quit_combo[2] = true},
-                    EventSummary::Key(_, KeyCode::KEY_F8, 0) => {quit_combo[2] = false},
+                    EventSummary::Key(_, KeyCode::KEY_F5, _) => {quit_combo[0] = match ev.value() {0 => false, 1 => true, _ => false}},
+                    EventSummary::Key(_, KeyCode::KEY_F7, _) => {quit_combo[1] = match ev.value() {0 => false, 1 => true, _ => false}},
+                    EventSummary::Key(_, KeyCode::KEY_F8, _) => {quit_combo[2] = match ev.value() {0 => false, 1 => true, _ => false}},
                     _ => {}
                 }
             };
-            if quit_combo == [true, true, true] {panic!("force quit");}
+            if quit_combo == [true, true, true] {panic!("__ ___ FORCE QUIT ___ __");}
         }
     });
 
@@ -146,7 +143,8 @@ fn main() -> Result<(), Mouse2JoyError> {
                             AbsoluteAxisCode::ABS_X.0,
                             joystick_x_pos,
                         );
-                        match joystick.emit(&[ev]) {
+                        let _ = joystick.emit(&[ev]);
+                        /* match joystick.emit(&[ev]) {
                           Ok(_) => {
                             info!("Moved joystick position to {}", joystick_x_pos);
                           },
@@ -154,7 +152,7 @@ fn main() -> Result<(), Mouse2JoyError> {
                             warn!("Failed to emit joystick event: {}", e);
                             continue;
                           }
-                        }
+                        } */
                     },
                     EventSummary::Key(_, KeyCode::BTN_LEFT, 1) => {
                         if mouse2joy_active == false {continue}

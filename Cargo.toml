@@ -16,6 +16,7 @@ dirs = "5.0.1"
 [package.metadata]
 os = "linux"
 
+# used to panic! the entire program from a thread
 [profile.release]
 panic = 'abort'
 
